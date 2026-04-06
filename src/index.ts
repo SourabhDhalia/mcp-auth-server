@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import "dotenv/config";
 
 import { randomUUID } from "node:crypto";
@@ -11,10 +13,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 import { loadConfig } from "./config.js";
-import { SwiggyBridgeManager } from "./lib/swiggyBridgeManager.js";
+import { OAuthMcpBridgeManager } from "./lib/oauthMcpBridgeManager.js";
 
 const config = loadConfig();
-const bridgeManager = new SwiggyBridgeManager(config);
+const bridgeManager = new OAuthMcpBridgeManager(config);
 
 const app = createMcpExpressApp({ host: config.host });
 
@@ -106,7 +108,7 @@ function renderHtml(title: string, body: string): string {
 app.get("/healthz", (_req, res) => {
   res.json({
     ok: true,
-    service: "swiggy-mcp-oauth-bridge",
+    service: config.bridgeId,
     status: bridgeManager.getStatusSnapshot(),
   });
 });
@@ -124,7 +126,7 @@ app.get("/admin/login", async (_req, res) => {
         .send(
           renderHtml(
             "Bridge Authorized",
-            "<p>Swiggy OAuth is already valid for this bridge.</p><p>The proxied tool catalog has been refreshed. Reconnect your MCP client if it was already open.</p>",
+            `<p>${config.providerName} OAuth is already valid for this bridge.</p><p>The proxied tool catalog has been refreshed. Reconnect your MCP client if it was already open.</p>`,
           ),
         );
       return;
@@ -149,7 +151,7 @@ app.get("/admin/oauth/callback", async (req, res) => {
     res.status(400).send(
       renderHtml(
         "OAuth Failed",
-        `<p>Upstream Swiggy OAuth returned an error: <code>${error}</code></p>`,
+        `<p>Upstream ${config.providerName} OAuth returned an error: <code>${error}</code></p>`,
       ),
     );
     return;
@@ -170,7 +172,7 @@ app.get("/admin/oauth/callback", async (req, res) => {
     res.status(200).send(
       renderHtml(
         "Bridge Ready",
-        "<p>Swiggy OAuth completed successfully and the tool catalog was refreshed.</p><p>Your internal MCP clients can now connect to <code>/mcp</code>. Existing clients should reconnect to pick up the latest tools.</p>",
+        `<p>${config.providerName} OAuth completed successfully and the tool catalog was refreshed.</p><p>Your internal MCP clients can now connect to <code>/mcp</code>. Existing clients should reconnect to pick up the latest tools.</p>`,
       ),
     );
   } catch (callbackError) {
@@ -211,7 +213,7 @@ async function handleMcpRequest(req: Request, res: Response): Promise<void> {
     if (!entry && !sessionId && isInitializeRequest(req.body)) {
       const server = new McpServer(
         {
-          name: "swiggy-mcp-oauth-bridge",
+          name: config.bridgeId,
           version: "0.1.0",
         },
         {
@@ -288,7 +290,12 @@ app.post("/mcp", requireInternalBearerToken, async (req, res) => {
 app.get("/mcp", requireInternalBearerToken, async (req, res) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   if (!sessionId) {
-    res.status(400).send("Missing MCP session ID.");
+    res.status(400).send(
+      renderHtml(
+        "MCP Client Endpoint",
+        "<p><code>/mcp</code> is the Streamable HTTP MCP endpoint for MCP clients, not a normal browser page.</p><p>If you are testing in a browser, use <code>/healthz</code>, <code>/admin/status</code>, or <code>/admin/login</code> instead.</p><p>If you are connecting an MCP client, point it to <code>/mcp</code> and let the client create the MCP session automatically.</p>",
+      ),
+    );
     return;
   }
 
@@ -319,7 +326,7 @@ app.delete("/mcp", requireInternalBearerToken, async (req, res) => {
 
 const server = app.listen(config.port, config.host, () => {
   console.log(
-    `Swiggy MCP OAuth bridge listening on ${config.publicBaseUrl} with MCP endpoint ${config.publicBaseUrl}/mcp`,
+    `${config.bridgeName} listening on ${config.publicBaseUrl} with MCP endpoint ${config.publicBaseUrl}/mcp`,
   );
   console.log(`Admin login: ${config.publicBaseUrl}/admin/login`);
   void bridgeManager.syncTools().catch((error) => {

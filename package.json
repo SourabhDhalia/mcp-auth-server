@@ -1,9 +1,26 @@
 {
-  "name": "swiggy-mcp-oauth-bridge",
+  "name": "mcp-auth-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Internal MCP bridge that completes Swiggy OAuth once and exposes approved MCP access over Streamable HTTP.",
+  "description": "OAuth-capable MCP bridge for exposing a simpler internal MCP endpoint in front of protected upstream MCP servers.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/SourabhDhalia/mcp-auth-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SourabhDhalia/mcp-auth-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SourabhDhalia/mcp-auth-server/issues"
+  },
+  "keywords": [
+    "mcp",
+    "oauth",
+    "model-context-protocol",
+    "bridge",
+    "auth",
+    "typescript"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",

@@ -1,63 +1,44 @@
-# OAuth-Capable MCP Bridge
+# MCP Auth Server
 
-This repository demonstrates a reusable pattern for an OAuth-capable remote MCP bridge.
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+![Node >=20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![MCP Bridge](https://img.shields.io/badge/MCP-OAuth%20Bridge-111827)
 
-The current implementation is preconfigured for Swiggy, but the same structure can be adapted for other OAuth-protected MCP servers.
+`mcp-auth-server` is a remote MCP bridge for OAuth-protected MCP servers.
 
-This project creates an internal MCP bridge for an OAuth-protected MCP provider, with Swiggy as the bundled example target.
+It sits between an upstream MCP provider and internal tools like LM Studio, Cursor, Claude Desktop, or custom office integrations. The bridge completes OAuth in a browser once, stores refreshable credentials on the server side, then exposes a simpler internal Streamable HTTP MCP endpoint to clients that should not manage the upstream OAuth flow directly.
 
-It solves the common office-network problem where an MCP client can reach a remote MCP endpoint but does not fully complete the upstream OAuth flow itself:
+The codebase is now structured as a general-purpose MCP auth bridge, with Swiggy kept as the bundled default preset and example configuration.
 
-- LM Studio or any other remote MCP client can connect to a normal internal Streamable HTTP MCP endpoint.
-- The bridge completes upstream OAuth once through a browser-based admin route.
-- Refreshable OAuth tokens are stored locally and reused for proxied MCP calls.
-- You can optionally gate internal clients with a simple bearer token while still hiding the upstream OAuth complexity from them.
+## Why This Exists
 
-## What It Does
+Some MCP clients can connect to remote MCP servers but do not reliably complete upstream OAuth flows. In those cases you usually want one of these:
 
-The bridge exposes:
+- use a desktop client that fully supports the provider's auth flow
+- place an internal bridge in front of the provider and centralize login there
 
-- `GET/POST/DELETE /mcp`: the internal MCP endpoint your office clients connect to
-- `GET /admin/login`: starts the upstream Swiggy OAuth flow
-- `GET /admin/oauth/callback`: receives the upstream OAuth callback
-- `GET /admin/status`: shows bridge health and proxied tool state
-- `POST /admin/sync-tools`: refreshes the tool catalog after login or upstream changes
-- `GET /healthz`: health probe
+This project implements the second path.
 
-Inside MCP itself, the bridge also exposes a few local helper tools:
+## Features
 
-- `bridge_status`
-- `bridge_sync_tools`
-- `bridge_login_url`
+- Exposes a standard internal MCP endpoint at `GET/POST/DELETE /mcp`
+- Completes upstream OAuth through `/admin/login` and `/admin/oauth/callback`
+- Stores refreshable OAuth state locally on the bridge host
+- Discovers upstream tools dynamically and proxies them through one MCP surface
+- Supports optional tool allowlisting via `MCP_ALLOWED_TOOLS`
+- Supports a single upstream MCP endpoint or a multi-endpoint provider layout
+- Keeps backward compatibility with older Swiggy-focused configuration names
 
-In the current example configuration, after OAuth succeeds it syncs tools from:
+## Default Preset
+
+Out of the box, the bridge is configured for Swiggy as an example OAuth-protected MCP provider. If you do nothing, it will discover tools from:
 
 - `https://mcp.swiggy.com/food`
 - `https://mcp.swiggy.com/im`
 - `https://mcp.swiggy.com/dineout`
 
-Duplicate tool names are de-duplicated by first endpoint wins, matching the current Swiggy multi-endpoint pattern.
-
-## General Applicability
-
-This bridge pattern is not limited to Swiggy.
-
-It is suitable for any OAuth-protected MCP server where you want to:
-
-- complete OAuth once in a controlled environment
-- persist refreshable credentials on the bridge side
-- expose a simpler internal MCP endpoint to office users or approved tools
-
-The current codebase is still Swiggy-focused:
-
-- endpoint defaults point to `mcp.swiggy.com`
-- tool discovery is performed against the Swiggy service URLs in `.env.example`
-- naming and examples in the code are still Swiggy-specific
-
-So the project is best described as:
-
-- a general OAuth-capable MCP bridge pattern
-- with a concrete Swiggy implementation included out of the box
+To use another provider, update the generic environment variables in `.env`.
 
 ## Quick Start
 
@@ -67,7 +48,7 @@ So the project is best described as:
 npm install
 ```
 
-2. Copy the environment file and edit values as needed.
+2. Copy the environment template.
 
 ```bash
 cp .env.example .env
@@ -79,13 +60,13 @@ cp .env.example .env
 npm run dev
 ```
 
-4. Open the admin login URL in a browser.
+4. Open the admin login URL.
 
 ```text
 http://localhost:3100/admin/login
 ```
 
-5. Finish the upstream OAuth flow in the browser.
+5. Complete the upstream OAuth flow.
 
 6. Point your MCP client at:
 
@@ -93,48 +74,86 @@ http://localhost:3100/admin/login
 http://localhost:3100/mcp
 ```
 
-If you set `INTERNAL_BEARER_TOKEN`, your MCP client must send:
+If you set `INTERNAL_BEARER_TOKEN`, your MCP client must also send:
 
 ```text
 Authorization: Bearer <your token>
 ```
 
-## Environment
+## Configuration
 
-Important variables:
+Core variables:
 
-- `PUBLIC_BASE_URL`: must match how the browser reaches this service, because the OAuth callback URL is derived from it
+- `BRIDGE_NAME`: human-readable bridge name shown in logs and status
+- `UPSTREAM_PROVIDER_NAME`: display name for the upstream provider
+- `PUBLIC_BASE_URL`: browser-visible base URL used to build the OAuth callback
 - `INTERNAL_BEARER_TOKEN`: optional internal gate for `/mcp`
-- `MCP_ALLOWED_TOOLS`: optional comma-separated allowlist if you only want approved Swiggy tools exposed
-- `TOKEN_STORE_PATH`: where the bridge persists the upstream OAuth client info and tokens
+- `MCP_ALLOWED_TOOLS`: optional comma-separated allowlist of proxied tools
+- `TOKEN_STORE_PATH`: local path for persisted OAuth client and token state
 
-## Before Uploading
+For upstream MCP endpoints, choose one of these patterns:
 
-Treat this repo as public-safe by default.
+Single endpoint:
+
+```env
+UPSTREAM_PROVIDER_NAME=Example Provider
+UPSTREAM_MCP_URL=https://example.com/mcp
+UPSTREAM_ENDPOINT_NAME=Example Primary
+UPSTREAM_ENDPOINT_KEY=primary
+OAUTH_CLIENT_NAME=Example Provider MCP Bridge
+OAUTH_SCOPE=mcp:tools mcp:resources mcp:prompts
+```
+
+Multiple endpoints:
+
+```env
+UPSTREAM_PROVIDER_NAME=Example Provider
+MCP_UPSTREAM_ENDPOINTS_JSON=[{"key":"core","name":"Example Core","url":"https://example.com/mcp/core"},{"key":"billing","name":"Example Billing","url":"https://example.com/mcp/billing"}]
+OAUTH_CLIENT_NAME=Example Provider MCP Bridge
+OAUTH_SCOPE=mcp:tools mcp:resources mcp:prompts
+```
+
+Swiggy-compatible aliases remain supported for older setups:
+
+- `SWIGGY_FOOD_URL`
+- `SWIGGY_INSTAMART_URL`
+- `SWIGGY_DINEOUT_URL`
+- `SWIGGY_SCOPE`
+- `SWIGGY_CLIENT_NAME`
+
+## Admin and MCP Routes
+
+- `GET /healthz`: health probe and bridge status
+- `GET /admin/status`: current bridge state, endpoints, and tool catalog summary
+- `GET /admin/login`: starts upstream OAuth
+- `GET /admin/oauth/callback`: completes upstream OAuth
+- `POST /admin/sync-tools`: refreshes the tool catalog
+- `GET/POST/DELETE /mcp`: Streamable HTTP MCP endpoint for clients
+
+Inside MCP, the bridge also exposes:
+
+- `bridge_status`
+- `bridge_sync_tools`
+- `bridge_login_url`
+
+## Security Notes
 
 - `.env` is local-only and must not be committed.
-- `data/swiggy-oauth.json` is local-only and must not be committed.
-- The bridge can recreate the OAuth token later by running `npm run dev` or `npm start` and completing `/admin/login` again.
-- If a real token or secret was ever pasted into docs, screenshots, chat, or Git history, revoke it and issue a new one.
+- Token files under `data/` are local-only and must not be committed.
+- By default the bridge stores OAuth state on disk for operational simplicity. For production deployments, move this to encrypted secret storage if needed.
+- If a real token or secret is ever pasted into Git history, screenshots, or docs, revoke it and issue a new one.
 
-Publish-time Git hygiene checklist:
+## Public Upload Checklist
 
-1. Initialize Git only after confirming the ignore rules are in place.
-2. Review the first staged file set before pushing so only source, docs, lockfiles, and safe templates are included.
-3. If this folder is later moved under another Git repository, re-check that `.env`, `data/swiggy-oauth.json`, `dist/`, and `node_modules/` are still ignored.
+1. Confirm `.env`, `data/`, `dist/`, and `node_modules/` stay ignored.
+2. Review the staged file set before pushing.
+3. Re-run `npm run typecheck` and `npm run build`.
+4. If you change providers, double-check the public docs do not include live credentials or tenant-specific URLs you should keep private.
 
-## Recommended Office Setup
+## Positioning
 
-For a clean internal deployment:
+This project is best described as:
 
-1. Put this bridge behind your office VPN or internal reverse proxy.
-2. Set `PUBLIC_BASE_URL` to the internal hostname users will open in a browser.
-3. Optionally set `INTERNAL_BEARER_TOKEN` or front it with SSO at the reverse proxy.
-4. Complete `/admin/login` once with the account you want the bridge to use.
-5. Share only the internal `/mcp` endpoint with LM Studio or other approved clients.
-
-## Notes
-
-- Existing MCP clients may need to reconnect after the first successful OAuth so they receive the newly synced tools.
-- The bridge currently proxies tools only. That is the important path for most OAuth-protected MCP office-access setups.
-- Tokens are stored on disk in JSON for operational simplicity. In production, move this to encrypted secret storage if needed.
+- a reusable OAuth-capable MCP auth bridge
+- a practical remote-MCP compatibility layer for office environments
+- a Swiggy-ready example implementation that can be adapted to other OAuth-protected MCP providers

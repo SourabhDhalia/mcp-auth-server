@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import * as z from "zod/v4";
 
 type JsonSchema = Record<string, unknown>;
