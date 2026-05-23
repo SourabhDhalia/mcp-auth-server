@@ -89,6 +89,7 @@ Core variables:
 - `PUBLIC_BASE_URL`: browser-visible base URL used to build the OAuth callback
 - `INTERNAL_BEARER_TOKEN`: optional internal gate for `/mcp`
 - `MCP_ALLOWED_TOOLS`: optional comma-separated allowlist of proxied tools
+- `OAUTH_REDIRECT_URI`: optional exact OAuth redirect URI for providers with a fixed allowlist
 - `TOKEN_STORE_PATH`: local path for persisted OAuth client and token state
 
 For upstream MCP endpoints, choose one of these patterns:
@@ -102,6 +103,14 @@ UPSTREAM_ENDPOINT_NAME=Example Primary
 UPSTREAM_ENDPOINT_KEY=primary
 OAUTH_CLIENT_NAME=Example Provider MCP Bridge
 OAUTH_SCOPE=mcp:tools mcp:resources mcp:prompts
+```
+
+If a provider only allows fixed OAuth callback URLs, set `OAUTH_REDIRECT_URI`
+to one of the provider-approved redirect URIs. After browser login, copy the
+returned `code` query parameter and open:
+
+```text
+http://localhost:3100/admin/oauth/callback?code=<code>
 ```
 
 Multiple endpoints:

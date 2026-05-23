@@ -18,6 +18,7 @@ export interface BridgeConfig {
   providerName: string;
   internalBearerToken?: string;
   allowedTools?: Set<string>;
+  oauthRedirectUri?: string;
   oauthScope: string;
   oauthClientName: string;
   tokenStorePath: string;
@@ -186,6 +187,7 @@ export function loadConfig(): BridgeConfig {
     providerName,
     internalBearerToken: process.env.INTERNAL_BEARER_TOKEN || undefined,
     allowedTools: parseAllowedTools(process.env.MCP_ALLOWED_TOOLS),
+    oauthRedirectUri: process.env.OAUTH_REDIRECT_URI || undefined,
     oauthScope: process.env.OAUTH_SCOPE || process.env.SWIGGY_SCOPE || DEFAULT_OAUTH_SCOPE,
     oauthClientName:
       process.env.OAUTH_CLIENT_NAME ||

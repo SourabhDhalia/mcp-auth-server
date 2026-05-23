@@ -6,6 +6,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
 
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
@@ -19,6 +20,7 @@ interface PersistedOAuthState {
   clientInformation?: OAuthClientInformationMixed;
   tokens?: OAuthTokens;
   codeVerifier?: string;
+  state?: string;
 }
 
 export class FileOAuthClientProvider implements OAuthClientProvider {
@@ -45,6 +47,12 @@ export class FileOAuthClientProvider implements OAuthClientProvider {
 
   authorizationUrl(): URL | undefined {
     return this.lastAuthorizationUrl;
+  }
+
+  state(): string {
+    this.persistedState.state = randomBytes(24).toString("base64url");
+    this.persist();
+    return this.persistedState.state;
   }
 
   clientInformation(): OAuthClientInformationMixed | undefined {

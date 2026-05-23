@@ -42,7 +42,7 @@ interface LocalBinding {
 
 function buildErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    return error.message;
+    return error.message || error.name || error.constructor.name;
   }
 
   return String(error);
@@ -68,20 +68,19 @@ export class OAuthMcpBridgeManager {
   private readonly proxiedTools = new Map<string, UpstreamTool>();
   private pendingAuth?:
     | {
-        startedAt: string;
-        transport: StreamableHTTPClientTransport;
-      }
+      startedAt: string;
+      transport: StreamableHTTPClientTransport;
+    }
     | undefined;
   private pendingAuthorizationUrl?: string;
   private lastSyncAt?: string;
   private lastSyncError?: string;
   private syncInFlight?: Promise<void>;
 
-  constructor(private readonly config: BridgeConfig) {
-    const callbackUrl = new URL(
-      "/admin/oauth/callback",
-      this.config.publicBaseUrl,
-    ).toString();
+  constructor(public readonly config: BridgeConfig) {
+    const callbackUrl =
+      this.config.oauthRedirectUri ||
+      new URL("/admin/oauth/callback", this.config.publicBaseUrl).toString();
 
     const metadata: OAuthClientMetadata = {
       client_name: this.config.oauthClientName,
@@ -152,6 +151,10 @@ export class OAuthMcpBridgeManager {
         tokens?.expiration ||
         null,
     };
+  }
+
+  isAuthorized(): boolean {
+    return Boolean(this.provider.tokens());
   }
 
   getLoginUrl(): string {
